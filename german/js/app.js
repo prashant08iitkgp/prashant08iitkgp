@@ -38,7 +38,7 @@
   }
 
   /* ---------- state ---------- */
-  function blank() { return { v: 1, xp: 0, streak: 0, best: 0, last: null, days: {}, goal: 50, units: {}, srs: {}, exams: {}, videos: {}, writing: {}, voice: '', updated: 0, started: today() }; }
+  function blank() { return { v: 1, xp: 0, streak: 0, best: 0, last: null, days: {}, goal: 50, units: {}, srs: {}, exams: {}, videos: {}, writing: {}, voice: '', name: '', updated: 0, started: today() }; }
   function load() { try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v) return Object.assign(blank(), s); } catch (e) {} return blank(); }
   var S = load();
   function save(silent) { S.updated = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} if (!silent) schedulePush(); }
@@ -295,7 +295,7 @@
       ['Speak out loud: shadow 5 sentences', nu ? '#/unit/' + nu.id + '/speak' : '#/level/A1', false, '5 to 10 min']
     ];
     view(
-      '<section class="hero card"><div><div class="muted small">Level ' + playerLevel() + ' · ' + S.xp + ' XP total</div><h1>Guten ' + (new Date().getHours() < 11 ? 'Morgen' : new Date().getHours() < 18 ? 'Tag' : 'Abend') + ', Prashant!</h1>' +
+      '<section class="hero card"><div><div class="muted small">Level ' + playerLevel() + ' · ' + S.xp + ' XP total</div><h1>Guten ' + (new Date().getHours() < 11 ? 'Morgen' : new Date().getHours() < 18 ? 'Tag' : 'Abend') + ', ' + esc(S.name) + '!</h1>' +
       '<div class="goal"><span>Daily goal ' + Math.min(tx, S.goal) + ' / ' + S.goal + ' XP</span>' + bar(tx / S.goal * 100) + '</div></div>' +
       '<div class="streak"><div class="flame">🔥</div><b>' + st + '</b><span>day streak</span><small>best ' + S.best + '</small></div></section>' +
       '<section class="card"><h2>Today</h2><ol class="plan">' + plan.map(function (p) { return '<li class="' + (p[2] ? 'done' : '') + '"><a href="' + p[1] + '"><span>' + esc(p[0]) + '</span><small>' + p[3] + '</small></a></li>'; }).join('') + '</ol>' +
@@ -526,6 +526,7 @@
   function settings() {
     var vs = voices.map(function (v) { return '<option ' + (v.name === (chosenVoice() || {}).name ? 'selected' : '') + '>' + esc(v.name) + '</option>'; }).join('');
     view('<a class="back" href="#/home">‹ Home</a><section class="card"><h1>Settings</h1>' +
+      '<label class="field">Your name<div class="row"><input type="text" id="sname" maxlength="30" value="' + esc(S.name) + '"><button class="btn sm" id="snameb">Save name</button></div></label>' +
       '<label class="field">Daily goal<select id="goal">' + [20, 30, 50, 80, 120].map(function (g) { return '<option value="' + g + '" ' + (S.goal === g ? 'selected' : '') + '>' + g + ' XP ' + ({ 20: '(casual)', 30: '(regular)', 50: '(serious, about 30 to 45 min)', 80: '(intense)', 120: '(insane)' })[g] + '</option>'; }).join('') + '</select></label>' +
       '<label class="field">German voice<select id="voice">' + (vs || '<option>No German voice found on this device</option>') + '</select></label><button class="btn ghost sm" data-say="Guten Tag! Ich heiße Anna und ich komme aus Berlin.">Test voice</button>' +
       '<p class="small muted">Speech check: ' + (SR ? 'available' : 'not available in this browser (Chrome on Android and desktop supports it)') + '.</p></section>' +
@@ -536,7 +537,8 @@
       '<section class="card"><h2>Backup</h2><div class="row"><button class="btn" id="exp">Download backup</button><label class="btn ghost">Restore backup<input type="file" id="imp" accept=".json" hidden></label></div>' +
       '<details><summary>Danger zone</summary><p class="small">Type RESET to delete all progress on this device.</p><div class="row"><input type="text" id="rst"><button class="btn bad" id="rstb">Reset</button></div></details></section>');
     var $ = function (x) { return document.getElementById(x); };
-    $('goal').onchange = function () { S.goal = +this.value; save(); updateHeader(); };
+    $('snameb').onclick = function () { var n = $('sname').value.trim().replace(/\s+/g, ' '); if (!n) return toast('Please enter a name'); S.name = n; save(); toast('Name saved. Hallo, ' + n + '!'); };
+    $('goal').onchange =function () { S.goal = +this.value; save(); updateHeader(); };
     $('voice').onchange = function () { S.voice = this.value; save(); say('Hallo, so klinge ich.'); };
     $('ssave').onclick = function () { SY.token = $('tok').value.trim(); SY.gist = $('gid').value.trim(); SY.auto = $('auto').checked; saveSync(); if (!SY.token) return setSync('Enter a token first.'); setSync('Pushing…'); push().then(function () { $('gid').value = SY.gist; setSync('Saved to Gist ' + SY.gist + ' at ' + new Date().toLocaleTimeString()); }).catch(function (e) { setSync('Failed: ' + e.message); }); };
     $('spull').onclick = function () { SY.token = $('tok').value.trim(); SY.gist = $('gid').value.trim(); SY.auto = $('auto').checked; saveSync(); setSync('Pulling…'); pull(true).then(function () { setSync('Pulled at ' + new Date().toLocaleTimeString()); }).catch(function (e) { setSync('Failed: ' + e.message); }); };
@@ -577,9 +579,25 @@
     var el = document.getElementById('hstats'); if (!el) return;
     el.innerHTML = '<span title="Day streak">🔥 ' + streakNow() + '</span><span title="XP today">⚡ ' + todayXP() + '/' + S.goal + '</span><span title="Words due">🗂️ ' + dueList().length + '</span>';
   }
+  function welcome() {
+    var returning = S.xp > 0;
+    view('<section class="welcome card"><div class="wflag"><i></i><i></i><i></i></div><h1>Willkommen bei DeutschWeg!</h1>' +
+      '<p class="muted">Your German course from A1 to C1, built for the Goethe exams.</p>' +
+      '<label class="field">Wie heißt du? <span class="muted small">(What is your name?)</span><input type="text" id="wname" maxlength="30" autocomplete="given-name" placeholder="Your first name"></label>' +
+      '<button class="btn primary big wide" id="wgo" disabled>' + (returning ? 'Continue' : 'Los geht\'s! (Let us start)') + '</button>' +
+      '<p class="small muted">No password needed. Your progress is saved in this browser on this device only' + (returning ? ', and your existing progress is kept.' : '.') + '</p></section>');
+    var inp = document.getElementById('wname'), go = document.getElementById('wgo');
+    inp.focus();
+    inp.oninput = function () { go.disabled = !inp.value.trim(); };
+    var start = function () { var n = inp.value.trim().replace(/\s+/g, ' '); if (!n) return; S.name = n.charAt(0).toUpperCase() + n.slice(1); save(); if (!location.hash || location.hash === '#/home') route(); else location.hash = '#/home'; };
+    go.onclick = start;
+    keyHandler = function (e) { if (e.key === 'Enter') start(); };
+  }
   function route() {
     var h = location.hash.replace(/^#\/?/, '').split('/'), v = h[0] || 'home';
     if (window.speechSynthesis) speechSynthesis.cancel();
+    document.body.classList.toggle('welcome-mode', !S.name);
+    if (!S.name) { welcome(); updateHeader(); return; }
     if (v === 'level') levelView(h[1]);
     else if (v === 'unit') unitView(h[1], h[2]);
     else if (v === 'review') review();
